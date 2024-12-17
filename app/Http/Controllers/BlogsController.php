@@ -18,11 +18,16 @@ class BlogsController extends Controller
         if ($blogs->isNotEmpty()) {
             $baseUrl = env('APP_URL');
             $blogsData = $blogs->map(function ($blog) use ($baseUrl) {
+                $imageUrl = $blog->image;
+                if ($imageUrl && !preg_match('/^https?:\/\//', $imageUrl)) {
+                    $imageUrl = $baseUrl . '/Blog-Images/' . $imageUrl;
+                }
+
                 return [
                     'id' => $blog->id,
                     'title' => $blog->title,
                     'shortDesc' => $blog->shortDesc,
-                    'image' => $blog->image ? $baseUrl . '/Blog-Images/' . $blog->image : null,
+                    'image' => $imageUrl,
                     'description' => $blog->description,
                     'auther' => $blog->auther,
                 ];
@@ -35,17 +40,44 @@ class BlogsController extends Controller
         } else {
             return response()->json([
                 'success' => false,
-                'data' => 'Blogs not found',
+                'data' => 'Blogs Data Not Found.',
             ], 404);
         }
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Display the specified resource.
      */
-    public function create()
+    public function show($id)
     {
-        //
+        $blog = Blogs::find($id);
+
+        if ($blog) {
+            $baseUrl = env('APP_URL');
+            $imageUrl = $blog->image;
+
+            if ($imageUrl && !preg_match('/^https?:\/\//', $imageUrl)) {
+                $imageUrl = $baseUrl . '/Blog-Images/' . $imageUrl;
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $blog->id,
+                    'title' => $blog->title,
+                    'shortDesc' => $blog->shortDesc,
+                    'image' => $imageUrl,
+                    'description' => $blog->description,
+                    'auther' => $blog->auther,
+                    'date' => \Carbon\Carbon::parse($blog->created_at)->format('d M, Y')
+                ],
+            ], 200);
+        } else {
+            return response()->json([
+                'success' => false,
+                'data' => 'Blog Not Found.',
+            ], 404);
+        }
     }
 
     /**
@@ -104,34 +136,94 @@ class BlogsController extends Controller
     }
 
     /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-    /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, $id)
     {
-        //
+        $validator = Validator::make($request->all(), [
+            'title' => 'required',
+            'shortDesc' => 'required',
+            'image' => 'required',
+            'description' => 'required',
+            'auther' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please fix validation errors.',
+                'error' => $validator->errors(),
+            ], 400);
+        }
+
+        $blog = Blogs::find($id);
+        $blog->title = $request->title;
+        $blog->shortDesc = $request->shortDesc;
+
+        if ($request->hasFile('image')) {
+            if ($blog->image) {
+                $oldImagePath = public_path('Blog-Images/' . $blog->image);
+                if (file_exists($oldImagePath)) {
+                    unlink($oldImagePath);
+                }
+            }
+
+            $image = $request->file('image');
+            $originalName = pathinfo($image->getClientOriginalName(), PATHINFO_FILENAME);
+
+            $sanitizedName = preg_replace('/[^A-Za-z0-9\-]/', '', str_replace(' ', '-', $originalName));
+
+            $imageName = $sanitizedName . '-' . time() . '.' . $image->extension();
+            $image->move(public_path('Blog-Images'), $imageName);
+            $blog->image = $imageName;
+        }
+
+
+        $blog->description = $request->description;
+        $blog->auther = $request->auther;
+        $blog->save();
+        $baseUrl = env('APP_URL');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Blog Updated successfully.',
+            'data' => [
+                'id' => $blog->id,
+                'title' => $blog->title,
+                'shortDesc' => $blog->shortDesc,
+                'image' => $blog->image ? $baseUrl . '/Blog-Images/' . $blog->image : null,
+                'description' => $blog->description,
+                'auther' => $blog->auther,
+            ],
+        ], 200);
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy($id)
     {
-        //
+        $blog = Blogs::find($id);
+        if ($blog) {
+            if ($blog->image) {
+                $oldImagePath = public_path('Blog-Images/' . $blog->image);
+                if (file_exists($oldImagePath)) {
+                    unlink($oldImagePath);
+                }
+            }
+
+            $blog->delete();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Blog Deleted Successfully.',
+                'data' => $blog
+            ], 200);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Blog Not Found.'
+            ], 200);
+        }
     }
 }
