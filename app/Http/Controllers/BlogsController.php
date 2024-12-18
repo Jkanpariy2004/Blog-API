@@ -69,7 +69,7 @@ class BlogsController extends Controller
                     'image' => $imageUrl,
                     'description' => $blog->description,
                     'auther' => $blog->auther,
-                    'date' => \Carbon\Carbon::parse($blog->created_at)->format('d M, Y')
+                    'date' => \Carbon\Carbon::parse($blog->created_at)->format('d M, Y'),
                 ],
             ], 200);
         } else {
@@ -143,7 +143,7 @@ class BlogsController extends Controller
         $validator = Validator::make($request->all(), [
             'title' => 'required',
             'shortDesc' => 'required',
-            'image' => 'required',
+            'image' => 'nullable',
             'description' => 'required',
             'auther' => 'required',
         ]);
@@ -177,7 +177,6 @@ class BlogsController extends Controller
             $image->move(public_path('Blog-Images'), $imageName);
             $blog->image = $imageName;
         }
-
 
         $blog->description = $request->description;
         $blog->auther = $request->auther;
@@ -217,13 +216,31 @@ class BlogsController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Blog Deleted Successfully.',
-                'data' => $blog
+                'data' => $blog,
             ], 200);
         } else {
             return response()->json([
                 'success' => false,
-                'message' => 'Blog Not Found.'
+                'message' => 'Blog Not Found.',
             ], 200);
         }
+    }
+
+    public function search(Request $request)
+    {
+        $blog = Blogs::where('title', 'like', '%' . $request->keyword . '%');
+        $blogs = $blog->get();
+
+        if ($blogs->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'data' => 'No Blog Found.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $blogs,
+        ], 200);
     }
 }
